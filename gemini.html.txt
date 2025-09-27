@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AirQuality Nexus</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .view { display: none; }
+        .active-view { display: block; }
+        .login-container { max-width: 400px; margin-top: 10vh; }
+        .navbar-brand { font-weight: bold; }
+        .dashboard-card { background-color: #fff; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+        #map { height: 400px; border-radius: 10px; }
+        /* Vehicle Profile Card (Tinder-like) */
+        .profile-card-container { display: flex; justify-content: center; align-items: center; min-height: 350px; }
+        .vehicle-card { background: #fff; padding: 20px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.15); width: 300px; text-align: center; border: 1px solid #ddd; }
+        .vehicle-card img { width: 100px; height: 100px; object-fit: cover; margin-bottom: 15px; }
+        .vehicle-card h5 { margin-bottom: 5px; color: #333; }
+        .vehicle-card p { color: #666; margin-bottom: 3px; font-size: 0.9rem; }
+        .vehicle-card .badge { font-size: 0.8rem; }
+        /* Chart containers */
+        .chart-container { height: 350px; }
+        .token-display { font-size: 1.5rem; font-weight: bold; color: #28a745; }
+        .leaderboard-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container">
+            <a class="navbar-brand" href="#"><i class="bi bi-wind"></i> AirQuality Nexus</a>
+            <div class="d-flex">
+                <span id="user-greeting" class="navbar-text me-3 d-none"></span>
+                <button id="logout-btn" class="btn btn-outline-light d-none"><i class="bi bi-box-arrow-right"></i> Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+
+        <div id="login-view" class="view active-view">
+            <div class="login-container card p-4 mx-auto">
+                <h3 class="text-center mb-4">Login</h3>
+                <div id="login-alert" class="alert alert-danger d-none" role="alert"></div>
+                <form id="login-form">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        <input type="text" class="form-control" id="username" placeholder="citizen / policymaker" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="password" placeholder="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">Login</button>
+                </form>
+                 <div class="mt-3 text-center text-muted">
+                    <small>Citizen: `citizen` / `password`</small><br>
+                    <small>Policymaker: `policymaker` / `password`</small>
+                </div>
+            </div>
+        </div>
+
+        <div id="citizen-view" class="view">
+            <h2 class="mb-4">Citizen Dashboard</h2>
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="dashboard-card">
+                        <h4><i class="bi bi-geo-alt-fill text-primary"></i> Hyperlocal AQI Dashboard</h4>
+                        <div id="map"></div>
+                        <div class="mt-3">
+                            <button id="safe-route-btn" class="btn btn-success"><i class="bi bi-shield-check"></i> Show Safe Route Suggestion</button>
+                             <div id="health-alert" class="alert alert-warning mt-3 d-none"></div>
+                        </div>
+                    </div>
+                     <div class="dashboard-card">
+                         <h4><i class="bi bi-people-fill text-info"></i> Eco-Challenges</h4>
+                         <p>Complete challenges to earn tokens!</p>
+                         <ul class="list-group">
+                             <li class="list-group-item d-flex justify-content-between align-items-center">
+                                 Use public transport for a day.
+                                 <button class="btn btn-sm btn-info" onclick="earnTokens(10)">Complete (+10 <i class="bi bi-coin"></i>)</button>
+                             </li>
+                              <li class="list-group-item d-flex justify-content-between align-items-center">
+                                 Carpool to work.
+                                 <button class="btn btn-sm btn-info" onclick="earnTokens(15)">Complete (+15 <i class="bi bi-coin"></i>)</button>
+                             </li>
+                         </ul>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="dashboard-card text-center">
+                        <h4><i class="bi bi-trophy-fill text-warning"></i> My Tokens</h4>
+                        <p class="token-display"><span id="token-count">0</span> <i class="bi bi-coin"></i></p>
+                        <small class="text-muted">Redeem at petrol pumps, FASTag, EV charging stations.</small>
+                    </div>
+                    <div class="dashboard-card">
+                         <h4><i class="bi bi-car-front-fill text-secondary"></i> My Vehicle Profile</h4>
+                         <div id="vehicle-profile-display" class="profile-card-container">
+                             <p class="text-muted">No vehicle profile created yet.</p>
+                         </div>
+                         <button class="btn btn-secondary w-100 mt-2" data-bs-toggle="modal" data-bs-target="#vehicleModal">Create/Edit Profile</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="policymaker-view" class="view">
+            <h2 class="mb-4">Policymaker Analytics Dashboard</h2>
+             <div class="row">
+                <div class="col-lg-7">
+                    <div class="dashboard-card">
+                         <h4><i class="bi bi-pie-chart-fill text-danger"></i> Air Pollution Source Identification</h4>
+                         <div class="chart-container">
+                             <canvas id="source-chart"></canvas>
+                         </div>
+                    </div>
+                     <div class="dashboard-card">
+                         <h4><i class="bi bi-map-fill text-success"></i> Geospatial Hotspots</h4>
+                         <div id="hotspot-map" style="height: 350px; border-radius: 10px;"></div>
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                     <div class="dashboard-card">
+                         <h4><i class="bi bi-graph-up-arrow text-primary"></i> AQI Forecast & Trends (Next 72 Hours)</h4>
+                          <div class="chart-container">
+                             <canvas id="trends-chart"></canvas>
+                         </div>
+                    </div>
+                     <div class="dashboard-card">
+                         <h4><i class="bi bi-lightbulb-fill text-warning"></i> AI Policy Recommendations</h4>
+                         <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><strong>Focus:</strong> High PM2.5 from traffic in Sector 21. <br><strong>Suggestion:</strong> Implement temporary traffic diversions.</li>
+                            <li class="list-group-item"><strong>Focus:</strong> Industrial emissions spike detected near Phase 8. <br><strong>Suggestion:</strong> Increase monitoring & schedule inspections.</li>
+                             <li class="list-group-item"><strong>Focus:</strong> Anticipated stubble burning contribution increase. <br><strong>Suggestion:</strong> Launch awareness campaigns in peripheral regions.</li>
+                        </ul>
+                        <button class="btn btn-primary w-100 mt-3"><i class="bi bi-file-earmark-arrow-down"></i> Export Report</button>
+                    </div>
+                </div>
+             </div>
+        </div>
+    </div>
+
+
+    <div class="modal fade" id="vehicleModal" tabindex="-1" aria-labelledby="vehicleModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="vehicleModalLabel">Create Your Vehicle Profile</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="vehicle-form">
+                        <div class="mb-3">
+                            <label for="vehicleName" class="form-label">Vehicle Name (e.g., My Swift)</label>
+                            <input type="text" class="form-control" id="vehicleName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="vehicleType" class="form-label">Vehicle Type</label>
+                            <select class="form-select" id="vehicleType" required>
+                                <option value="Car">Car</option>
+                                <option value="Bike">Bike</option>
+                                <option value="Auto">Auto-rickshaw</option>
+                                <option value="EV">Electric Vehicle</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="fuelType" class="form-label">Fuel Type</label>
+                             <select class="form-select" id="fuelType" required>
+                                <option>Petrol</option>
+                                <option>Diesel</option>
+                                <option>CNG</option>
+                                <option>Electric</option>
+                            </select>
+                        </div>
+                         <div class="mb-3">
+                            <label for="vehicleAge" class="form-label">Vehicle Age (Years)</label>
+                            <input type="number" class="form-control" id="vehicleAge" required min="0">
+                        </div>
+                         <div class="mb-3">
+                            <label for="emissionStd" class="form-label">Emission Standard</label>
+                             <select class="form-select" id="emissionStd" required>
+                                <option>BS6</option>
+                                <option>BS4</option>
+                                <option>BS3</option>
+                                <option>Pre-BS3</option>
+                            </select>
+                        </div>
+                         <div class="mb-3">
+                            <label for="weeklyKm" class="form-label">Avg. Weekly Kilometers</label>
+                            <input type="number" class="form-control" id="weeklyKm" required min="0">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Save Profile</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // --- Global Variables & Dummy Data ---
+        let citizenMap, hotspotMap;
+        let safeRoutePolyline;
+        let currentUser = null;
+        let userTokens = 0;
+        const DUMMY_AQI_DATA = [
+            { lat: 26.9124, lng: 75.7873, aqi: 155, name: "City Palace" },
+            { lat: 26.853, lng: 75.805, aqi: 210, name: "Jawahar Circle" },
+            { lat: 26.924, lng: 75.827, aqi: 85, name: "Hawa Mahal" },
+            { lat: 26.935, lng: 75.755, aqi: 320, name: "Vaishali Nagar" },
+            { lat: 26.828, lng: 75.806, aqi: 120, name: "Malviya Nagar" },
+        ];
+        
+        // --- Core Application Logic ---
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginForm = document.getElementById('login-form');
+            const logoutBtn = document.getElementById('logout-btn');
+
+            loginForm.addEventListener('submit', handleLogin);
+            logoutBtn.addEventListener('click', handleLogout);
+
+            // Check for logged-in user in session storage (for page refresh)
+            const savedUser = sessionStorage.getItem('airNexusUser');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                showDashboard(currentUser.role);
+            }
+        });
+
+        // --- Authentication ---
+        function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const loginAlert = document.getElementById('login-alert');
+
+            if (username === 'citizen' && password === 'password') {
+                currentUser = { name: 'Citizen User', role: 'citizen' };
+                sessionStorage.setItem('airNexusUser', JSON.stringify(currentUser));
+                showDashboard('citizen');
+            } else if (username === 'policymaker' && password === 'password') {
+                currentUser = { name: 'Policy Maker', role: 'policymaker' };
+                sessionStorage.setItem('airNexusUser', JSON.stringify(currentUser));
+                showDashboard('policymaker');
+            } else {
+                loginAlert.textContent = 'Invalid credentials. Please try again.';
+                loginAlert.classList.remove('d-none');
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            sessionStorage.removeItem('airNexusUser');
+            switchView('login-view');
+            document.getElementById('logout-btn').classList.add('d-none');
+            document.getElementById('user-greeting').classList.add('d-none');
+            // Clean up maps and charts if necessary
+            if (citizenMap) citizenMap.remove();
+            if (hotspotMap) hotspotMap.remove();
+        }
+
+        function showDashboard(role) {
+            document.getElementById('logout-btn').classList.remove('d-none');
+            const userGreeting = document.getElementById('user-greeting');
+            userGreeting.textContent = `Welcome, ${currentUser.name}`;
+            userGreeting.classList.remove('d-none');
+            
+            if (role === 'citizen') {
+                switchView('citizen-view');
+                initCitizenDashboard();
+            } else if (role === 'policymaker') {
+                switchView('policymaker-view');
+                initPolicymakerDashboard();
+            }
+        }
+
+        function switchView(viewId) {
+            document.querySelectorAll('.view').forEach(view => view.classList.remove('active-view'));
+            document.getElementById(viewId).classList.add('active-view');
+        }
+
+        // --- Citizen Mode Functions ---
+        function initCitizenDashboard() {
+            // Use a timeout to ensure the map container is visible before initialization
+            setTimeout(() => {
+                initializeCitizenMap();
+                populateAqiMarkers();
+            }, 100);
+            
+            document.getElementById('vehicle-form').addEventListener('submit', handleVehicleProfile);
+            document.getElementById('safe-route-btn').addEventListener('click', showSafeRoute);
+        }
+
+        function initializeCitizenMap() {
+            if (citizenMap) return; // Already initialized
+            citizenMap = L.map('map').setView([26.9124, 75.7873], 12); // Centered on Jaipur
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(citizenMap);
+        }
+
+        function getAqiColor(aqi) {
+            if (aqi <= 50) return 'green';
+            if (aqi <= 100) return 'yellow';
+            if (aqi <= 200) return 'orange';
+            if (aqi <= 300) return 'red';
+            return 'purple';
+        }
+
+        function populateAqiMarkers() {
+            let highestAqi = 0;
+            DUMMY_AQI_DATA.forEach(point => {
+                if(point.aqi > highestAqi) highestAqi = point.aqi;
+
+                const icon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style='background-color:${getAqiColor(point.aqi)};' class='marker-pin'></div><i class='bi bi-wind'></i>`,
+                    iconSize: [30, 42],
+                    iconAnchor: [15, 42]
+                });
+                L.marker([point.lat, point.lng])
+                 .addTo(citizenMap)
+                 .bindPopup(`<b>${point.name}</b><br>AQI: ${point.aqi}`);
+            });
+            
+            // Health Alert
+            const healthAlert = document.getElementById('health-alert');
+            if(highestAqi > 150) {
+                healthAlert.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> <strong>Health Alert:</strong> Unhealthy AQI levels (${highestAqi}) detected nearby. Limit outdoor activity.`;
+                healthAlert.classList.remove('d-none');
+            } else {
+                 healthAlert.classList.add('d-none');
+            }
+        }
+
+        function showSafeRoute() {
+            if (safeRoutePolyline) {
+                citizenMap.removeLayer(safeRoutePolyline);
+            }
+            // Dummy route that avoids high AQI points (Vaishali Nagar & Jawahar Circle)
+            const latlngs = [
+                [26.924, 75.827], // Hawa Mahal (Good)
+                [26.9124, 75.7873], // City Palace (Moderate)
+                [26.828, 75.806]  // Malviya Nagar (Moderate)
+            ];
+            safeRoutePolyline = L.polyline(latlngs, {color: 'blue', dashArray: '5, 10'}).addTo(citizenMap);
+            citizenMap.fitBounds(safeRoutePolyline.getBounds());
+            alert('A suggested safer route is now shown on the map in blue.');
+        }
+
+        function handleVehicleProfile(e) {
+            e.preventDefault();
+            const profile = {
+                name: document.getElementById('vehicleName').value,
+                type: document.getElementById('vehicleType').value,
+                fuel: document.getElementById('fuelType').value,
+                age: document.getElementById('vehicleAge').value,
+                std: document.getElementById('emissionStd').value,
+                km: document.getElementById('weeklyKm').value,
+            };
+            
+            const display = document.getElementById('vehicle-profile-display');
+            const icon = profile.type === 'Car' ? 'bi-car-front-fill' : 'bi-bicycle';
+            
+            display.innerHTML = `
+                <div class="vehicle-card">
+                    <i class="bi ${icon}" style="font-size: 4rem; color: #0d6efd;"></i>
+                    <h5>${profile.name}</h5>
+                    <p>${profile.age} years old | ${profile.km} km/week</p>
+                    <div>
+                        <span class="badge bg-primary">${profile.type}</span>
+                        <span class="badge bg-info text-dark">${profile.fuel}</span>
+                        <span class="badge bg-secondary">${profile.std}</span>
+                    </div>
+                </div>
+            `;
+            
+            // Close modal
+            const modal = bootstrap.Modal.getInstance(document.getElementById('vehicleModal'));
+            modal.hide();
+        }
+
+        function earnTokens(amount) {
+            userTokens += amount;
+            document.getElementById('token-count').textContent = userTokens;
+            alert(`Congratulations! You've earned ${amount} tokens.`);
+        }
+
+        // --- Policymaker Mode Functions ---
+        function initPolicymakerDashboard() {
+             setTimeout(() => {
+                renderSourceChart();
+                renderTrendsChart();
+                initializeHotspotMap();
+            }, 100);
+        }
+
+        function renderSourceChart() {
+            const ctx = document.getElementById('source-chart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Vehicular Emissions', 'Industrial Pollution', 'Construction Dust', 'Stubble Burning', 'Other'],
+                    datasets: [{
+                        label: 'Pollution Source Contribution',
+                        data: [40, 25, 15, 12, 8],
+                        backgroundColor: ['#dc3545', '#6c757d', '#ffc107', '#fd7e14', '#198754'],
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: { display: true, text: 'Pollution Source Contribution (%)' }
+                    }
+                }
+            });
+        }
+        
+        function renderTrendsChart() {
+             const ctx = document.getElementById('trends-chart').getContext('2d');
+             new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['-72h', '-48h', '-24h', 'Now', '+24h', '+48h', '+72h'],
+                    datasets: [{
+                        label: 'AQI PM2.5',
+                        data: [120, 135, 180, 155, 190, 210, 170],
+                        fill: true,
+                        borderColor: '#0d6efd',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'Forecast Confidence',
+                        data: [null, null, null, 155, 160, 175, 140],
+                        borderColor: '#adb5bd',
+                        borderDash: [5, 5],
+                        label: 'Lower Bound'
+                    },
+                    {
+                        label: 'Forecast Confidence',
+                         data: [null, null, null, 155, 220, 245, 200],
+                        fill: '-1',
+                        backgroundColor: 'rgba(173, 181, 189, 0.2)',
+                        borderColor: '#adb5bd',
+                        borderDash: [5, 5],
+                         label: 'Upper Bound'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Historical and Forecasted AQI' }
+                    },
+                    scales: { y: { beginAtZero: true } }
+                }
+             });
+        }
+        
+        function initializeHotspotMap() {
+            if (hotspotMap) return;
+            hotspotMap = L.map('hotspot-map').setView([26.9124, 75.7873], 11);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            }).addTo(hotspotMap);
+
+            // Add dummy heatmap data (circles for simplicity)
+            DUMMY_AQI_DATA.forEach(point => {
+                if (point.aqi > 150) { // Only show hotspots
+                    L.circle([point.lat, point.lng], {
+                        color: getAqiColor(point.aqi),
+                        fillColor: getAqiColor(point.aqi),
+                        fillOpacity: 0.4,
+                        radius: point.aqi * 10 // Radius proportional to AQI
+                    }).addTo(hotspotMap).bindPopup(`<b>${point.name}</b><br>AQI: ${point.aqi}<br>Est. Population Affected: ${point.aqi * 150}`);
+                }
+            });
+        }
+
+    </script>
+
+</body>
+</html>
